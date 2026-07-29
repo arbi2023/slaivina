@@ -1,0 +1,365 @@
+# Slaivina: A Small "Come me su una slavina"-Style Language Model
+
+Learning project to fine-tune, quantize, and RAG-augment a small open-weights
+LLM so it can generate text in the style of the blog
+`https://comemesuunaslavina.retrocog.org/`, running on a laptop / commodity
+hardware (CPU or a single consumer GPU with 6–12GB VRAM).
+
+> **Site note:** the URL is served by **Ghost 3.2** (static HTTrack mirror),
+> not Hugo — `generator` meta tag and Ghost asset paths confirm this. Content
+> is Italian, short poetic/aphoristic posts (often a single sentence or
+> short paragraph + a photo), ~51 paginated index pages. This shapes the
+> scraper and the data strategy below (small corpus, style-transfer framing
+> rather than knowledge-heavy fine-tuning).
+
+---
+
+## Learning goals (why each phase exists)
+
+| Phase | Ecosystem skill practiced |
+|---|---|
+| Data prep | Web scraping, text cleaning, dataset curation, train/val split |
+| Fine-tuning | PEFT/LoRA/QLoRA, instruction vs. continued-pretraining framing |
+| Quantization | GGUF/AWQ/GPTQ, precision tradeoffs, llama.cpp toolchain |
+| Evaluation | Perplexity, stylistic similarity, human eval |
+| RAG | Embeddings, vector DBs, retrieval-augmented generation |
+| Deployment | Local inference servers (Ollama/llama.cpp), simple UI |
+
+---
+
+## Target model selection (SOTA, small, open-weight)
+
+Pick one **base** model to fine-tune. All are runnable on a laptop after
+quantization; pick based on available RAM/VRAM and Italian fluency needs.
+
+> **Updated 2026 (revised):** the project's content is text-first (occasional
+> photos, not something generation or RAG need to understand), so a
+> multimodal base buys nothing here. The entire **Qwen3.5** generation
+> (0.8B/2B/4B/9B/122B) is natively vision-language via early fusion — the
+> vision component is baked into pretraining, not a separable bolt-on module
+> — so it was dropped in favor of the newest **pure-text** small model,
+> **Qwen3-4B-Instruct-2507**, which also scores higher than Qwen3.5-2B on
+> most published benchmarks (MMLU-Pro, GPQA, IFEval, etc.). Kept the original
+> 2024/2025-era table as history.
+
+| Model | Params | Notes |
+|---|---|---|
+| **Qwen3-4B-Instruct-2507** (recommended default, 2026) | 4B | Newest pure-text-generation small Qwen (dense, no vision tower); Apache-2.0; outperforms Qwen3.5-2B on most published benchmarks; mature Unsloth/llama.cpp/GGUF support; CPU-feasible after 4-bit quant |
+| Qwen3-1.7B | 1.7B | Smaller/faster pure-text fallback if 4B is too heavy for available hardware; noticeably weaker on reasoning/instruction-following than the 4B |
+| Qwen3.5-2B | 2B | Multimodal (vision-language, early fusion) alternative — only worth it if the project later needs to *understand* post photos (e.g. image-grounded RAG/eval), not just generate text |
+| ~~Qwen2.5-1.5B-Instruct~~ | 1.5B | *(superseded)* original default |
+| ~~Qwen2.5-3B-Instruct~~ | 3B | *(superseded)* |
+| ~~Llama-3.2-3B-Instruct~~ | 3B | *(superseded)* Meta community license |
+| ~~Gemma-2-2B-it~~ | 2B | *(superseded)* |
+| ~~Phi-3.5-mini-instruct~~ | 3.8B | *(superseded)* |
+
+**Recommendation:** start with **Qwen3-4B-Instruct-2507** for fast iteration
+on a laptop (16GB+ RAM, or any 6GB+ GPU after 4-bit quant); drop to
+**Qwen3-1.7B** only if hardware is too constrained for the 4B. Being a plain
+text-generation model, no vision-specific loader/handling is needed —
+Unsloth's standard `FastLanguageModel` path applies directly.
+
+Given the corpus will be small (a single blog, likely a few hundred short
+posts), **do not attempt full fine-tuning** — parameter-efficient fine-tuning
+(LoRA/QLoRA) is the only sane approach; full fine-tuning would overfit/forget
+catastrophically on so little data.
+
+---
+
+## Data preparation
+
+### Acquisition
+- The mirror is static HTML (HTTrack). Options:
+  1. **Best**: get raw access to the Ghost content export (Admin → Labs →
+     Export content JSON) if you manage the blog — gives clean structured
+     JSON (title, html/mobiledoc, tags, published_at) directly, no scraping.
+  2. **Fallback**: crawl the static mirror with a script that:
+     - walks `page/2/`, `page/3/`, ... `page/51/` (and root) index pages,
+     - collects post permalinks,
+     - fetches each post page, extracts the `<section class="post-content">`
+       or `<script type="application/ld+json">` `description`/`headline`
+       fields, and body HTML.
+  Prefer option 1 — cleaner, includes drafts/tags, avoids HTML boilerplate
+  entirely.
+
+### Cleaning
+- Strip HTML tags, Ghost `kg-card` comments, embedded image tags (keep alt
+  text/captions only if useful).
+- Normalize whitespace/unicode (NFC), fix mis-encoded apostrophes (`&#x27;`),
+  de-dupe near-identical posts.
+- Keep metadata: `slug`, `title`, `published_at`, `tags`, `plain_text`.
+- Segment into two dataset "shapes" (both usually useful):
+  - **Continued-pretraining corpus**: one long text file / JSONL of raw post
+    bodies, for causal-LM style absorption (captures voice, rhythm, imagery).
+  - **Instruction-tuning (SFT) corpus**: synthetic instruction/response pairs
+    where instruction = a short prompt/theme (auto-generated, e.g. via
+    keyword/title as the "prompt") and response = the actual post text. This
+    teaches the model to *produce* posts on request, not just autocomplete.
+
+### Synthetic prompt generation
+Because there's no natural "instruction" in a poetry blog, generate one per
+post using a larger model (one-time, offline) or simple heuristics:
+- Ask a capable model (e.g. via API, or the base Qwen model itself) to write
+  a short prompt/theme description a human might have given to elicit that
+  post ("Scrivi un breve testo poetico su ..."). Store as `(prompt, post)`
+  pairs.
+- Add a fixed system prompt describing the persona/voice for consistent
+  style conditioning at inference time, e.g.:
+  `"Sei l'autore del blog 'Come me su una slavina': scrivi in italiano, con
+  tono intimo, immagini oniriche/malinconiche, frasi brevi."`
+
+### Splits & size expectations
+- 90/10 or 95/5 train/val split, stratified by year/tag if possible.
+- With a small corpus (few hundred posts), expect val set to be tiny —
+  supplement evaluation with held-out qualitative review (see
+  [Evaluation](#evaluation)).
+- Deduplicate any post reused across CTA/footer boilerplate.
+
+### Deliverables in repo
+```
+data/
+  raw/            # scraped/exported original HTML or JSON, untouched
+  processed/
+    posts.jsonl        # {slug, title, date, tags, text}
+    pretrain.txt        # concatenated cleaned bodies for CPT
+    sft_train.jsonl     # {prompt, response}
+    sft_val.jsonl
+scripts/
+  scrape.py
+  clean.py
+  make_sft_pairs.py
+  split_dataset.py
+```
+
+---
+
+## Fine-tuning
+
+### Tooling
+**Use Unsloth** as the training framework. It's built on PyTorch +
+Hugging Face `transformers`/`peft`/`trl` under the hood (same concepts,
+same checkpoint format), but patches attention/kernels for ~2x faster
+training and significantly lower memory use — the difference between
+"fits on a laptop GPU or even CPU in reasonable time" and "doesn't".
+Same Python API style as vanilla `transformers`, so nothing conceptual
+is lost by starting here instead of the lower-level stack.
+
+- `pip install unsloth` (pulls in compatible `torch`, `transformers`,
+  `peft`, `trl`, `bitsandbytes` versions).
+- Load base model via `FastLanguageModel.from_pretrained(..., load_in_4bit=True)`.
+- Attach LoRA via `FastLanguageModel.get_peft_model(...)`.
+- Train with `trl.SFTTrainer` (Unsloth is a drop-in accelerator for it).
+- Mac/Apple Silicon note: Unsloth currently targets NVIDIA/CUDA (and
+  experimental AMD/Intel); on a Mac use `mlx-lm` LoRA fine-tuning instead
+  (see
+  [Hardware expectations](#hardware-expectations)).
+
+### Method
+- **QLoRA**: load base model in 4-bit (`bitsandbytes` nf4), attach LoRA
+  adapters (rank 16–32, alpha 32–64, target `q_proj,k_proj,v_proj,o_proj,
+  gate_proj,up_proj,down_proj`), train only adapters.
+- Two-stage (optional but recommended for this stylistic use case):
+  1. **Stage A – continued pretraining** on `pretrain.txt` (causal LM, no
+     prompt/response split) for 1–3 epochs, low LR (~1e-4), to soak up
+     vocabulary/imagery/rhythm.
+  2. **Stage B – SFT** on `sft_train.jsonl` with chat template, 3–5 epochs,
+     LR ~2e-4, to teach "respond in this style given a prompt".
+- Batch size 1–4 with gradient accumulation to fit laptop VRAM/RAM; sequence
+  length 512–1024 is plenty (posts are short).
+- Track loss/eval with Weights & Biases or plain CSV logging — keep it
+  simple for a learning project.
+
+### Hardware expectations
+- Any NVIDIA GPU with 6GB+ VRAM: Unsloth QLoRA, minutes-to-tens-of-minutes
+  per epoch at 1.5B–3B — the sweet spot for this project.
+- CPU-only: Unsloth requires CUDA, so on a CPU-only laptop fall back to
+  plain `transformers`+`peft`+`bitsandbytes` (slow, hours per epoch, but
+  workable for a learning project at 1.5B).
+- Apple Silicon (MPS): use `mlx-lm` LoRA fine-tuning instead of Unsloth —
+  notably faster than PyTorch/MPS on Mac hardware.
+
+### Fine-tuning deliverable
+- LoRA adapter weights (small, tens of MB) + merged full-precision model
+  checkpoint (`merge_and_unload`) ready for quantization.
+
+---
+
+## Quantization
+
+Goal: produce a model runnable comfortably on commodity hardware (CPU
+inference at interactive-ish speed).
+
+1. Convert merged HF model → **GGUF** using `llama.cpp`'s
+   `convert_hf_to_gguf.py`.
+2. Quantize to a few candidate levels with `llama-quantize`:
+   - `Q4_K_M` (best default balance of size/quality),
+   - `Q5_K_M` (higher quality, still small),
+   - `Q8_0` (near-lossless, for comparison/eval baseline).
+3. Optionally also produce an **AWQ** or **GPTQ** 4-bit export if you want
+   to compare against GGUF and learn the differences (AutoAWQ / AutoGPTQ).
+4. Benchmark tokens/sec and perplexity at each quant level on val set to
+   make the size/quality tradeoff concrete (this is a core "learning"
+   deliverable — a small table/plot of quant level vs. perplexity vs. speed).
+
+Deliverable: `slaivina-1.5b-q4_k_m.gguf` (and siblings) small enough to ship
+in the repo release or via Hugging Face Hub model card.
+
+**Cross-platform note:** GGUF is architecture-agnostic — the exact same
+file runs on x86 (Linux/Windows) and Apple Silicon via `llama.cpp`/Ollama
+(Metal backend on Mac, AVX2/CUDA on x86), so training only needs to happen
+once on whichever machine is available. If training was done on Mac via
+`mlx-lm` (see [Hardware expectations](#hardware-expectations)), merge the
+LoRA adapter back into a standard Hugging
+Face checkpoint first — `convert_hf_to_gguf.py` expects that format
+regardless of which machine/framework produced it.
+
+---
+
+## Evaluation
+
+Given the subjective/stylistic goal, combine automatic + human eval:
+- **Perplexity** on held-out val text (base vs. fine-tuned vs. each quant
+  level) — sanity check that fine-tuning helped and quantization didn't
+  destroy it.
+- **Style-similarity**: embed generated samples and real posts with a
+  sentence-embedding model (e.g. `intfloat/multilingual-e5-small`), compare
+  cosine similarity distributions (generated-vs-corpus vs. base-model-vs-
+  corpus) as a proxy for "sounds like the blog".
+- **Human/blind eval**: generate N samples from base vs. fine-tuned model
+  given the same prompts; have the blog author (you) or readers blind-rate
+  which sound authentic — this is the real ground truth for a style-transfer
+  task.
+- **Qualitative log**: keep a `EVAL.md`/notebook with side-by-side samples
+  across training stages and quant levels.
+
+---
+
+## RAG system (extending content knowledge beyond style)
+
+Style fine-tuning teaches *voice*; RAG lets the model *recall or reference*
+actual post content/facts (dates, recurring themes/characters, specific
+imagery) without needing it memorized in weights — and lets it stay current
+as new posts are published.
+
+### RAG pipeline
+1. **Chunking**: each post is already a natural short chunk; optionally
+   also chunk by paragraph for longer posts.
+2. **Embeddings**: `intfloat/multilingual-e5-small` or
+   `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (both small,
+   Italian-capable, CPU-friendly).
+3. **Vector store**: start with **ChromaDB** (simplest, embedded, file-
+   based, zero-infra) or **FAISS** (lighter, no server) — both fine for a
+   few hundred–thousand chunks on a laptop. Qdrant is a good "next step" if
+   you want to learn a proper vector DB server.
+4. **Retrieval**: top-k (k=3–5) similarity search per user query, optionally
+   with a re-ranker (`bge-reranker-base`) if quality needs a boost.
+5. **Generation**: feed retrieved chunks + system persona prompt + user
+   query into the fine-tuned model (via llama.cpp server or Ollama) to
+   produce a grounded, in-style answer.
+6. **Orchestration**: keep it simple and inspectable — plain Python
+   (`llama-index` or `langchain` optional convenience, or hand-rolled ~150
+   lines) rather than a heavy framework, since this is a learning project.
+
+### RAG deliverable
+```
+rag/
+  build_index.py     # embeds posts.jsonl -> chroma/faiss index
+  query.py            # CLI: ask a question, get retrieved+generated answer
+  server.py           # optional small FastAPI wrapper
+```
+
+---
+
+## Deployment and serving
+
+- **Ollama**: easiest path — `Modelfile` wrapping the GGUF + system prompt,
+  `ollama create slaivina -f Modelfile`, then `ollama run slaivina`.
+- **llama.cpp server** (`llama-server`): OpenAI-compatible local API,
+  useful for the RAG script to call over HTTP.
+- **UI options** (pick one, optional):
+  - `open-webui` pointed at Ollama for a full chat UI with zero code,
+  - a minimal Gradio/Streamlit app for prompt → generated post, with a
+    toggle for "RAG-grounded" vs "pure generation".
+
+---
+
+## Repository layout (proposed)
+
+```
+slaivina/
+  PLAN.md                  <- this file
+  README.md                <- quickstart for contributors
+  data/                     (raw/ processed/, gitignored except samples)
+  scripts/                  (scrape, clean, dataset building)
+  training/
+    stage_a_pretrain.py
+    stage_b_sft.py
+    configs/*.yaml
+  quantize/
+    convert_and_quantize.sh
+  eval/
+    perplexity.py
+    style_similarity.py
+    EVAL.md
+  rag/
+    build_index.py
+    query.py
+    server.py
+  deployment/
+    Modelfile
+    docker-compose.yml (optional: llama-server + open-webui)
+  environment.yml / requirements.txt
+```
+
+---
+
+## Contributor how-to (quickstart, to expand in README.md)
+
+1. **Setup**: `python -m venv .venv && pip install -r requirements.txt`
+   (transformers, peft, trl, bitsandbytes, accelerate, datasets,
+   sentence-transformers, chromadb, beautifulsoup4).
+2. **Get data**: either drop a Ghost content-export JSON into `data/raw/`,
+   or run `scripts/scrape.py` against the mirror URL.
+3. **Clean & build datasets**: `python scripts/clean.py` then
+   `python scripts/make_sft_pairs.py`.
+4. **Fine-tune**: `python training/stage_a_pretrain.py --config
+   training/configs/qwen2.5-1.5b.yaml` then `stage_b_sft.py`.
+5. **Merge + quantize**: `bash quantize/convert_and_quantize.sh
+   <merged-model-dir>`.
+6. **Evaluate**: `python eval/perplexity.py` and
+   `python eval/style_similarity.py`.
+7. **Build RAG index**: `python rag/build_index.py`.
+8. **Run locally**: `ollama create slaivina -f deployment/Modelfile &&
+   ollama run slaivina`, or `python rag/query.py "tema: la nebbia"`.
+9. Contributions welcome: more posts (as the blog grows), better synthetic
+   prompts, additional eval prompts, alternate base models.
+
+---
+
+## Licensing, ethics, attribution
+
+- You manage the blog, so using its content for this fine-tune is your
+  call; still worth stating clearly in the repo:
+  - Data license/terms for `data/` (e.g. "content © the blog author, used
+    with permission for this personal ML project, not for redistribution
+    as training data by third parties without consent").
+  - Model card noting it's a small personal-style-transfer experiment, not
+    a factual/authoritative source, and generations are AI-authored
+    pastiche, not the real author's words — label outputs accordingly if
+    ever shared publicly.
+  - Respect the base model's license (Apache-2.0 for Qwen2.5/Gemma;
+    Meta's community license for Llama) when redistributing fine-tuned
+    weights.
+
+---
+
+## Suggested milestones
+
+1. Data export/scrape + cleaning pipeline working end-to-end (small win,
+   validates whole pipeline early).
+2. Stage A continued-pretraining run + qualitative check ("does it sound
+   Italian/poetic at all now?").
+3. Stage B SFT run + first side-by-side base-vs-tuned comparison.
+4. Quantize to GGUF, benchmark size/speed/perplexity tradeoffs.
+5. RAG index + retrieval-grounded generation demo.
+6. Package as Ollama model + simple UI; write up README + learnings.
