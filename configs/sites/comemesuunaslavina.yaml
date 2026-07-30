@@ -1,0 +1,67 @@
+# Site config for https://comemesuunaslavina.retrocog.org/
+#
+# The site is a static HTTrack mirror of a Ghost 3.2 blog (see PLAN.md's
+# "Data preparation" section). Original admin/export access is gone, so this
+# config drives the generic scraper in scripts/scrape.py against the public
+# mirror instead.
+
+name: comemesuunaslavina
+base_url: "https://comemesuunaslavina.retrocog.org/"
+start_url: "https://comemesuunaslavina.retrocog.org/"
+
+# Sent as the User-Agent request header. Identify yourself and the project.
+user_agent: "slaivina-scraper/0.1 (+https://github.com/arbi2023/slaivina; learning project)"
+
+# Politeness / robustness knobs (all optional, defaults shown).
+#
+# This mirror is static content on S3/CloudFront with very low traffic --
+# it comfortably handles many concurrent connections at a low per-request
+# delay. Override --workers / edit request_delay_seconds down further if
+# a different host needs to be crawled more gently.
+request_delay_seconds: 0.2
+timeout_seconds: 20
+max_retries: 3
+respect_robots_txt: true
+
+max_workers: 10
+
+# Dates on this site are day-first (Italian convention), e.g. "04-07-2018"
+# means 4 July 2018, not April 7th.
+date_dayfirst: true
+
+listing:
+  # Absolute/relative hrefs (resolved against the current page URL) pointing
+  # at individual posts, found on each listing/index page.
+  post_link_selectors:
+    - "article.post .post-box > a::attr(href)"
+
+  # Tried in order; first selector that yields a value wins for that page.
+  # `link[rel=next]` is emitted by Ghost (and many other blog engines) in
+  # <head>, so it's the most portable way to find the next listing page.
+  next_page_selectors:
+    - "link[rel='next']::attr(href)"
+    - "a.pagination-prev::attr(href)"
+
+  # Hard safety cap on how many listing pages to walk, regardless of what
+  # next_page_selectors keep returning (this site reports ~51 pages).
+  max_pages: 200
+
+post:
+  # First non-empty match wins.
+  title:
+    - "meta[property='og:title']::attr(content)"
+    - "title::text"
+
+  # First non-empty match wins; parsed with dateutil (dayfirst per above).
+  published_at:
+    - "meta[property='article:published_time']::attr(content)"
+    - "time::attr(datetime)"
+
+  # All matches across all selectors are kept (deduplicated).
+  tags:
+    - "meta[property='article:tag']::attr(content)"
+
+  # First non-empty match wins. `::html` keeps the inner HTML so
+  # scripts/clean.py can strip kg-card markup and normalize it later.
+  content_html:
+    - "section.post-content::html"

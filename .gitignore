@@ -216,3 +216,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- slaivina project-specific ---
+# Scraped/derived data and model artifacts are not committed; keep only
+# small illustrative samples under data/raw/samples or data/processed/samples.
+/data/raw/*
+!/data/raw/samples/
+/data/processed/*
+!/data/processed/samples/
+/training/checkpoints/
+/training/output/
+*.gguf
+*.safetensors
+.venv/
