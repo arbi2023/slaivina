@@ -281,6 +281,55 @@ rag/
   - a minimal Gradio/Streamlit app for prompt → generated post, with a
     toggle for "RAG-grounded" vs "pure generation".
 
+### Docker versus Hugging Face Hub for distribution
+
+Question: should the scraper and/or the trained model be packaged and
+shipped as a Docker image, instead of (or in addition to) a Hugging Face
+Hub upload? Conclusion: **use each for what it's good at, don't pick one
+for everything.**
+
+- **Model weights → Hugging Face Hub, not Docker.** Weights (LoRA adapters,
+  merged checkpoints, GGUF quants) are large binary artifacts that need
+  versioning, dedup, and easy fetch by whatever inference stack someone
+  chooses (`transformers`, `llama.cpp`, Ollama, vLLM...). HF Hub is built
+  for exactly this (git-lfs storage, model cards, per-file quant variants —
+  see how `unsloth/*-GGUF` repos already do this). Baking weights into a
+  Docker image instead would bloat the image, duplicate what HF already
+  solves, and lock consumers into pulling a whole container just to get a
+  file. This matches what §4 Quantization already recommends (ship GGUF via
+  release assets or HF Hub).
+- **Docker → for *serving*, not for *distributing weights*.** A
+  `deployment/docker-compose.yml` bundling `llama-server` (or Ollama) + the
+  optional RAG API (`rag/server.py`) is genuinely useful: one-command,
+  reproducible local deployment, independent of the host's Python/OS setup.
+  The compose file would reference/download the model from HF Hub at
+  container start (or mount a locally-quantized file), rather than embedding
+  weights in the image itself.
+- **The scraper doesn't need Docker either.** It's a small pure-Python
+  script with light dependencies (`requests`, `beautifulsoup4`, `PyYAML`,
+  `python-dateutil`); a venv managed via `uv` (`pyproject.toml`/`uv.lock`)
+  is already fully portable.
+  Docker would only earn its keep here if run unattended/scheduled outside
+  a CI runner that already provides Python (e.g. a bare-metal cron box) —
+  a secondary concern, not a reason to containerize the whole project.
+
+### Future CI and CD plans (not started)
+
+Ideas to revisit later, explicitly **not implemented yet**:
+- A scheduled workflow (e.g. GitHub Actions, weekly) re-running
+  `scripts/scrape.py --refresh` to pick up new posts, then `clean.py`/
+  `make_sft_pairs.py`. Since raw/processed data is gitignored, this would
+  need to push somewhere other than the git repo — e.g. open a PR with only
+  small sample diffs, or push the refreshed dataset to a private HF
+  *dataset* repo (parallel to the model repo).
+- A build pipeline that, on a training run, merges the LoRA adapter,
+  quantizes to GGUF, runs `eval/perplexity.py`/`style_similarity.py`, and
+  uploads the result to the HF Hub *model* repo (with the eval numbers in
+  the model card) — turning §4/§5's manual steps into one automated job.
+- A separate, optional `deployment/docker-compose.yml` build/publish step
+  for the serving stack described above (`llama-server`/Ollama + RAG API),
+  kept independent from the model-artifact pipeline.
+
 ---
 
 ## Repository layout (proposed)
@@ -308,16 +357,18 @@ slaivina/
   deployment/
     Modelfile
     docker-compose.yml (optional: llama-server + open-webui)
-  environment.yml / requirements.txt
+  pyproject.toml / uv.lock
 ```
 
 ---
 
 ## Contributor how-to (quickstart, to expand in README.md)
 
-1. **Setup**: `python -m venv .venv && pip install -r requirements.txt`
-   (transformers, peft, trl, bitsandbytes, accelerate, datasets,
-   sentence-transformers, chromadb, beautifulsoup4).
+1. **Setup**: `uv sync` (installs from `pyproject.toml`/`uv.lock` into a
+   `.venv`; add heavier phase-specific deps such as transformers/peft/trl/
+   bitsandbytes/accelerate/datasets/sentence-transformers/chromadb to
+   `pyproject.toml` as those phases are implemented). Run scripts with
+   `uv run python scripts/...` or activate `.venv` directly.
 2. **Get data**: either drop a Ghost content-export JSON into `data/raw/`,
    or run `scripts/scrape.py` against the mirror URL.
 3. **Clean & build datasets**: `python scripts/clean.py` then

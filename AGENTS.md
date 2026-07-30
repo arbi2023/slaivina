@@ -32,7 +32,8 @@ skills/                 # Agent Skill scaffolds, one per project phase (see skil
 - Default base model: Qwen3-4B-Instruct-2507 (see
   [Target model selection](PLAN.md#target-model-selection-sota-small-open-weight)
   before switching).
-- Python: one `requirements.txt`/`environment.yml` at repo root; use a venv.
+- Python: `pyproject.toml` at repo root, managed with `uv` (`uv sync` to
+  install, `uv run <cmd>` to execute); no separate `requirements.txt`.
 - When a phase's scripts don't exist yet, scaffold them under the paths above
   rather than inventing new top-level directories.
 
