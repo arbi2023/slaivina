@@ -1,6 +1,6 @@
 ---
 name: slaivina-finetune
-description: Use when setting up or running LoRA/QLoRA fine-tuning (continued pretraining or SFT) of the slaivina base model with Unsloth or mlx-lm.
+description: Use when setting up or running LoRA/QLoRA continued-pretraining fine-tuning of the slaivina base model with Unsloth or mlx-lm.
 ---
 
 # Fine-tuning
@@ -13,17 +13,18 @@ Reference: [PLAN.md — Fine-tuning](../../PLAN.md#fine-tuning).
    (NVIDIA GPU → Unsloth; CPU-only → plain `transformers`+`peft`+`bitsandbytes`;
    Apple Silicon → `mlx-lm`) — don't hardcode the model name here, it has
    already changed twice; PLAN.md is the single source of truth for it.
-2. **Stage A – continued pretraining** (`training/stage_a_pretrain.py`):
-   causal LM over `data/processed/pretrain.txt`. See
-   [PLAN.md — Method](../../PLAN.md#method) for current epoch/LR guidance.
-3. **Stage B – SFT** (`training/stage_b_sft.py`): chat-template training on
-   `sft_train.jsonl`/`sft_val.jsonl`. See
-   [PLAN.md — Method](../../PLAN.md#method) for current epoch/LR guidance.
-4. QLoRA rank/alpha/target-module choices, sequence length, and batch size
+2. **Single stage – continued pretraining** (`training/pretrain.py`):
+   causal LM over `data/processed/pretrain_train.txt`/`pretrain_val.txt`.
+   There is no SFT stage — see
+   [PLAN.md — Why no SFT stage](../../PLAN.md#why-no-sft-stage) for why
+   synthetic instruction/response pairs were rejected for this corpus.
+   See [PLAN.md — Method](../../PLAN.md#method) for current epoch/LR
+   guidance.
+3. QLoRA rank/alpha/target-module choices, sequence length, and batch size
    are also tracked in
    [PLAN.md — Method](../../PLAN.md#method) — update there, not here, when
    they change.
-5. Merge adapters (`merge_and_unload`) before handing off to quantization.
+4. Merge adapters (`merge_and_unload`) before handing off to quantization.
 
 ## Guardrails
 - Do not attempt full fine-tuning — corpus is small, will overfit/forget.
