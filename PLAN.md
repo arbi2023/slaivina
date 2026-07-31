@@ -86,21 +86,25 @@ catastrophically on so little data.
   entirely.
 
 ### Cleaning
-- Strip HTML tags, Ghost `kg-card` comments, embedded image tags (keep alt
-  text/captions only if useful).
-- Normalize whitespace/unicode (NFC), fix mis-encoded apostrophes (`&#x27;`),
-  de-dupe near-identical posts.
-- Keep metadata: `slug`, `title`, `published_at`, `tags`, `plain_text`.
+Implemented in `scripts/clean.py`. Strip HTML tags and Ghost `kg-card`
+comments, drop embedded images (no alt text/captions on this blog worth
+keeping), unescape entities and NFC-normalize unicode, preserve paragraph
+breaks (matters for the ~7% of posts that are multi-paragraph dialogue),
+and de-dupe exact-duplicate normalized text (keeping the earliest
+`published_at`). Output: `data/processed/posts.jsonl` with
+`{slug, title, date, tags, text}`.
 
-> **Corpus reality check (from the actual scrape, 403 posts):** this blog is
-> genuinely aphoristic — median post length is ~11 words, max ~42. Tags are
-> present on only 14/403 posts, too sparse to use for anything (filtering,
-> stratification). A couple of posts are image-only (old Tumblr imports with
-> no text at all, just an `<img>`) — exclude these from the pretraining
-> corpus; they have no text signal to learn from. No exact-duplicate
-> `content_html` was found, but a cheap normalized-text near-dup pass is
-> still worth running. Brevity is the style, not noise — don't filter short
-> posts on length alone.
+> **Corpus reality check (from the actual scrape, 403 raw posts, 397 kept
+> after cleaning):** this blog is genuinely aphoristic — median post length
+> is ~11 words, max ~42. Tags are present on only 14/403 posts, too sparse
+> to use for anything (filtering, stratification). Two posts are image-only
+> (old Tumblr imports with no text at all, just an `<img>`) — excluded. Four
+> more are legacy Tumblr-import "stub" posts whose only visible text lives
+> inside an `<a>` tag (a bare cross-reference like "autocit." back to the
+> original Tumblr post, no actual aphorism) — also excluded. One exact
+> normalized-text duplicate (a repost under a different slug/date) was
+> found and de-duped, keeping the earlier instance. Brevity is the style,
+> not noise — no length-based filtering of short posts.
 - Output is a single dataset shape: a **continued-pretraining corpus** (one
   long text file / JSONL of cleaned post bodies), for causal-LM style
   absorption (captures voice, rhythm, imagery).
