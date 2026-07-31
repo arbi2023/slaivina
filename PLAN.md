@@ -73,12 +73,15 @@ catastrophically on so little data.
   1. **Best**: get raw access to the Ghost content export (Admin → Labs →
      Export content JSON) if you manage the blog — gives clean structured
      JSON (title, html/mobiledoc, tags, published_at) directly, no scraping.
-  2. **Fallback**: crawl the static mirror with a script that:
-     - walks `page/2/`, `page/3/`, ... `page/51/` (and root) index pages,
-     - collects post permalinks,
-     - fetches each post page, extracts the `<section class="post-content">`
-       or `<script type="application/ld+json">` `description`/`headline`
-       fields, and body HTML.
+  2. **Fallback** (current reality — export access was lost): a generic,
+     config-driven crawler, `scripts/scrape.py`, walks the static mirror by
+     following each listing page's `rel=next` link (not a hardcoded
+     `page/N/` template, so it isn't tied to this site's current page
+     count), collects post permalinks, and pulls fields out of each post
+     page via CSS-selector-based queries defined per-site in
+     `configs/sites/*.yaml`. See the script's module docstring for the
+     query mini-language/config schema, and `configs/sites/README.md` for
+     how to adapt it to another site.
   Prefer option 1 — cleaner, includes drafts/tags, avoids HTML boilerplate
   entirely.
 
@@ -201,7 +204,7 @@ inference at interactive-ish speed).
    make the size/quality tradeoff concrete (this is a core "learning"
    deliverable — a small table/plot of quant level vs. perplexity vs. speed).
 
-Deliverable: `slaivina-1.5b-q4_k_m.gguf` (and siblings) small enough to ship
+Deliverable: `slaivina-<size>-q4_k_m.gguf` (and siblings) small enough to ship
 in the repo release or via Hugging Face Hub model card.
 
 **Cross-platform note:** GGUF is architecture-agnostic — the exact same

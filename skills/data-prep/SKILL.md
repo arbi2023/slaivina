@@ -10,8 +10,10 @@ Reference: [PLAN.md — Data preparation](../../PLAN.md#data-preparation).
 ## Steps
 1. **Acquire** raw content into `data/raw/` (untouched):
    - Preferred: Ghost content-export JSON (Admin → Labs → Export).
-   - Fallback: `scripts/scrape.py` walking the static HTTrack mirror's
-     `page/N/` index pages and post permalinks.
+   - Fallback (current reality): `scripts/scrape.py` against a config in
+     `configs/sites/` — see the script's module docstring and
+     `configs/sites/README.md` for the query language, config schema, and
+     how to adapt to a new site.
 2. **Clean** with `scripts/clean.py`: strip HTML/`kg-card` markup, normalize
    unicode/whitespace, de-dupe near-identical posts. Output
    `data/processed/posts.jsonl` with `{slug, title, date, tags, text}`.

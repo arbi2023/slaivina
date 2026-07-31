@@ -61,6 +61,15 @@ existing repo has ad-hoc docs that need to be reorganized into this pattern.
      mapping skills to plan-file sections/anchors.
    - Only add a skill once a phase has enough concrete, repeatable steps to
      justify it — don't scaffold speculative skills with no content.
+   - Distinguish **structural facts** (file paths, script names, order of
+     operations) from **volatile decisions** (model/library names, specific
+     hyperparameters, dataset choices). Structural facts are safe to state
+     directly in a skill; volatile decisions should only ever be linked to
+     their plan-file section, never restated — they're exactly the content
+     most likely to change and hardest to keep in sync across files once
+     duplicated. (Caught in this repo: a model name and several
+     hyperparameters/embedding-model choices had drifted out of sync across
+     three skill files after being restated instead of linked.)
 
 5. **Validate discovery, don't assume it.** Confirm the agent environment
    actually picks up `AGENTS.md` and the new skills (e.g. via `/env` or

@@ -11,9 +11,10 @@ Reference: [PLAN.md — Evaluation](../../PLAN.md#evaluation).
 1. **Perplexity** (`eval/perplexity.py`): compute on held-out val text for
    base vs. fine-tuned vs. each quant level.
 2. **Style similarity** (`eval/style_similarity.py`): embed generated
-   samples and real posts with `intfloat/multilingual-e5-small` (or similar),
-   compare cosine similarity distributions (generated-vs-corpus vs.
-   base-model-vs-corpus).
+   samples and real posts (see
+   [PLAN.md — Evaluation](../../PLAN.md#evaluation) for the current
+   embedding model choice), compare cosine similarity distributions
+   (generated-vs-corpus vs. base-model-vs-corpus).
 3. **Human/blind eval**: generate N samples from base vs. fine-tuned given
    identical prompts; blind-rate which sound authentic.
 4. Log everything qualitatively in `eval/EVAL.md` — side-by-side samples

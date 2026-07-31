@@ -23,5 +23,8 @@ Reference: [PLAN.md — Quantization](../../PLAN.md#quantization).
 - If training happened via `mlx-lm` on Apple Silicon, merge back into a
   standard HF checkpoint first — `convert_hf_to_gguf.py` expects that format
   regardless of training framework.
-- Name outputs `slaivina-<size>-<quant>.gguf` (e.g. `slaivina-1.5b-q4_k_m.gguf`).
+- Name outputs `slaivina-<size>-<quant>.gguf` using the base model's size
+  (e.g. `slaivina-4b-q4_k_m.gguf` for the current default — see
+  [PLAN.md — Target model selection](../../PLAN.md#target-model-selection-sota-small-open-weight)),
+  not a hardcoded size that can go stale if the base model changes.
 - Don't commit GGUF/quantized weights to git; ship via release assets or HF Hub.
