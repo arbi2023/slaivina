@@ -1,0 +1,70 @@
+# QLoRA continued-pretraining config for the slaivina style model.
+#
+# See PLAN.md -- Fine-tuning (Method, Hardware expectations) for the
+# reasoning behind these choices, and skills/finetune/SKILL.md for the
+# workflow this config is used in. Update PLAN.md, not just this file, if
+# the base model or core hyperparameter guidance changes.
+
+# Unsloth's pre-quantized 4-bit checkpoint -- faster download/load than
+# quantizing Qwen/Qwen3-4B-Instruct-2507 on the fly.
+model_name: unsloth/Qwen3-4B-Instruct-2507-unsloth-bnb-4bit
+max_seq_length: 1024
+load_in_4bit: true
+
+# LoRA (QLoRA: base stays 4-bit, only adapters train in higher precision).
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.0
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+
+# Data: read directly from data/processed/posts.jsonl and re-split with the
+# same seed/fraction scripts/split_dataset.py used, so document boundaries
+# stay unambiguous (see scripts/split_dataset.py docstring) rather than
+# re-parsing the derived pretrain_train.txt/pretrain_val.txt files.
+posts_path: data/processed/posts.jsonl
+val_fraction: 0.1
+seed: 42
+
+# Packing concatenates multiple short posts per training sequence
+# (separated by EOS), which matters here since posts average ~11 words --
+# without packing almost every sequence would be mostly padding.
+packing: true
+
+# Training loop.
+# num_train_epochs bumped from 3 -> 60: with packing, this tiny corpus (357
+# train posts) collapses to only 24 packed sequences, so at effective batch
+# size 8 that's just 3 optimizer steps/epoch -- 3 epochs (9 steps total) was
+# only enough to validate the pipeline runs, not to move the model's
+# weights meaningfully. A 60-epoch/180-step run confirmed the corpus
+# overfits fast on this LoRA config: train_loss dropped 4.14 -> 1.02 while
+# eval_loss *rose* from ~3.6 (step 15-30) to 7.08 (step 180). load_best_model_at_end
+# + early stopping below now pick the best held-out checkpoint automatically
+# regardless of num_train_epochs, so it's kept high as a ceiling -- training
+# should stop itself well before then.
+num_train_epochs: 60
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 4
+learning_rate: 1.0e-4
+warmup_ratio: 0.03
+optim: adamw_8bit
+logging_steps: 5
+eval_steps: 15
+save_steps: 30
+save_total_limit: 3
+# Stop once eval_loss hasn't improved for this many consecutive evals
+# (each eval is every eval_steps=15 steps/5 epochs) -- paired with
+# load_best_model_at_end, this restores the best checkpoint instead of
+# overfitting further.
+early_stopping_patience: 3
+report_to: none
+
+# Outputs (gitignored -- see .gitignore /training/checkpoints, /training/output).
+output_dir: training/output/qwen3_4b_qlora
+merge_and_save: true

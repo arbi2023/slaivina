@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""Manual, qualitative milestone check for the fine-tuning phase.
+
+Not a rigorous eval (see PLAN.md#evaluation for perplexity/style-similarity,
+still to be scaffolded) -- this is a cheap "did continued-pretraining
+actually move the model toward the corpus's voice" sanity check you can run
+by eye right after training, before spending time on quantization. Runs
+entirely on the fp16 merged model (or the base model, for comparison), so
+it isolates training effects from any later quantization artifacts.
+
+Generates a few short completions from a fixed persona + few-shot prompt
+(the same style of prompt PLAN.md#deployment-and-serving describes using
+at inference time) and prints them so you can compare base vs fine-tuned
+output for whether tone/brevity/imagery start to resemble the blog.
+Generation stops at the first newline (a fragment/post boundary in this
+corpus) rather than running to --max-new-tokens, which is just a fallback
+cap.
+
+Output is always printed to stdout, and (unless --no-log) also appended to
+--log-file (default eval/EVAL.md) with a timestamp/model header, per
+skills/eval/SKILL.md's "log everything qualitatively in eval/EVAL.md"
+guardrail -- otherwise these samples only exist in a terminal scrollback.
+
+Usage
+--------------------------------------------------------------------
+    # fine-tuned merged model (default) -- prints to stdout and appends
+    # to eval/EVAL.md
+    uv run eval/quick_style_check.py
+
+    # base (non-fine-tuned) model, for comparison
+    uv run eval/quick_style_check.py --model unsloth/Qwen3-4B-Instruct-2507-unsloth-bnb-4bit
+
+    # skip the log-file append (stdout only)
+    uv run eval/quick_style_check.py --no-log
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import random
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+PERSONA = (
+    "Sei l'autore del blog 'Come me su una slavina': scrivi in italiano, "
+    "con tono intimo, immagini oniriche/malinconiche, frasi brevi."
+)
+
+SEED_WORDS = ["mare", "autobus", "insonnia", "specchio", "citofono"]
+
+
+def load_fewshot(posts_path: Path, n: int, seed: int) -> list[str]:
+    with posts_path.open(encoding="utf-8") as f:
+        posts = [json.loads(line)["text"] for line in f if line.strip()]
+    return random.Random(seed).sample(posts, n)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--model",
+        default="training/output/qwen3_4b_qlora/merged",
+        help="path or HF repo id of the model to test (default: the merged "
+        "fine-tuned model)",
+    )
+    parser.add_argument("--max-seq-length", type=int, default=1024)
+    parser.add_argument("--load-in-4bit", action="store_true")
+    parser.add_argument("--fewshot-n", type=int, default=4)
+    parser.add_argument("--max-new-tokens", type=int, default=80)
+    parser.add_argument(
+        "--min-new-tokens",
+        type=int,
+        default=12,
+        help="floor on generated tokens before the newline stop condition "
+        "is allowed to end generation, so fragments aren't just one word",
+    )
+    parser.add_argument(
+        "--posts-path", type=Path, default=Path("data/processed/posts.jsonl")
+    )
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--log-file",
+        type=Path,
+        default=Path("eval/EVAL.md"),
+        help="append generated samples here as a qualitative eval log "
+        "(default: eval/EVAL.md)",
+    )
+    parser.add_argument(
+        "--no-log",
+        action="store_true",
+        help="print to stdout only, skip appending to --log-file",
+    )
+    args = parser.parse_args()
+
+    from unsloth import FastLanguageModel  # isort: skip
+    import torch
+
+    print(f"Loading model: {args.model}", file=sys.stderr)
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name=args.model,
+        max_seq_length=args.max_seq_length,
+        load_in_4bit=args.load_in_4bit,
+        dtype=None,
+    )
+    FastLanguageModel.for_inference(model)
+
+    fewshot = load_fewshot(args.posts_path, args.fewshot_n, args.seed)
+
+    results = []
+    for seed_word in SEED_WORDS:
+        prompt = PERSONA + "\n\n" + "\n".join(fewshot) + f"\n{seed_word}"
+        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+        with torch.no_grad():
+            out = model.generate(
+                **inputs,
+                max_new_tokens=args.max_new_tokens,
+                min_new_tokens=args.min_new_tokens,
+                do_sample=True,
+                temperature=0.9,
+                top_p=0.95,
+                pad_token_id=tokenizer.eos_token_id,
+                # These are meant to be single short fragments (like the
+                # few-shot examples), not free-running text -- stop as
+                # soon as the model emits a newline (i.e. tries to start
+                # a "next post") rather than always spending the full
+                # max_new_tokens budget and cutting a fragment off
+                # mid-sentence.
+                stop_strings=["\n"],
+                tokenizer=tokenizer,
+            )
+        completion = tokenizer.decode(
+            out[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True
+        ).strip()
+        results.append((seed_word, completion))
+        print(f"--- seed: {seed_word!r} ---")
+        print(completion)
+        print()
+
+    if not args.no_log:
+        append_log(args.log_file, args.model, fewshot, results)
+        print(f"Appended results to {args.log_file}", file=sys.stderr)
+
+    return 0
+
+
+def append_log(
+    log_file: Path,
+    model_name: str,
+    fewshot: list[str],
+    results: list[tuple[str, str]],
+) -> None:
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    is_new = not log_file.exists()
+    with log_file.open("a", encoding="utf-8") as f:
+        if is_new:
+            f.write(
+                "# Qualitative eval log\n\n"
+                "Samples from `eval/quick_style_check.py`, appended per run "
+                "-- see skills/eval/SKILL.md and PLAN.md#evaluation.\n"
+            )
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        f.write(f"\n## {timestamp} -- model: `{model_name}`\n\n")
+        f.write("Few-shot examples used:\n")
+        for post in fewshot:
+            f.write(f"- {post}\n")
+        f.write("\n")
+        for seed_word, completion in results:
+            f.write(f"**seed: `{seed_word}`**\n\n> {completion}\n\n")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

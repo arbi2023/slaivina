@@ -229,3 +229,5 @@ __marimo__/
 *.gguf
 *.safetensors
 .venv/
+# Unsloth's generated/compiled trainer cache (recreated on import, not project code).
+/unsloth_compiled_cache/
