@@ -1,0 +1,36 @@
+=== q4_k_m ===
+0.00.385.629 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.01.912.398 I 
+0.01.912.505 I system_info: n_threads = 10 (n_threads_batch = 10) / 20 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX_VNNI = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+0.01.912.522 I perplexity: tokenizing the input ..
+0.01.914.201 I perplexity: tokenization took 1.681 ms
+0.01.914.260 I perplexity: calculating perplexity over 3 chunks, n_ctx=256, batch_size=2048, n_seq=8
+0.16.589.233 I perplexity: 14.67 seconds per pass - ETA 0.08 minutes
+[1]22.9600,[2]29.3941,[3]33.2900,
+0.16.658.521 I Final estimate: PPL = 33.2900 +/- 5.50498
+
+
+=== q5_k_m ===
+0.00.580.604 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.817.813 I 
+0.00.817.931 I system_info: n_threads = 10 (n_threads_batch = 10) / 20 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX_VNNI = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+0.00.817.946 I perplexity: tokenizing the input ..
+0.00.820.038 I perplexity: tokenization took 2.089 ms
+0.00.820.124 I perplexity: calculating perplexity over 3 chunks, n_ctx=256, batch_size=2048, n_seq=8
+0.46.877.326 I perplexity: 46.06 seconds per pass - ETA 0.28 minutes
+[1]23.6167,[2]28.3205,[3]32.1906,
+0.46.953.347 I Final estimate: PPL = 32.1906 +/- 5.26480
+
+
+=== q8_0 ===
+0.00.600.046 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.841.779 I 
+0.00.841.897 I system_info: n_threads = 10 (n_threads_batch = 10) / 20 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX_VNNI = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+0.00.841.926 I perplexity: tokenizing the input ..
+0.00.844.037 I perplexity: tokenization took 2.107 ms
+0.00.844.121 I perplexity: calculating perplexity over 3 chunks, n_ctx=256, batch_size=2048, n_seq=8
+0.32.765.700 I perplexity: 31.92 seconds per pass - ETA 0.18 minutes
+[1]22.9805,[2]27.7733,[3]31.5102,
+0.32.852.784 I Final estimate: PPL = 31.5102 +/- 5.14571
+
+

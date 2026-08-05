@@ -496,6 +496,10 @@ slaivina/
 2. Stage A continued-pretraining run + qualitative check ("does it sound
    Italian/poetic at all now?").
 3. Stage B SFT run + first side-by-side base-vs-tuned comparison.
-4. Quantize to GGUF, benchmark size/speed/perplexity tradeoffs.
+4. Quantize to GGUF, benchmark size/speed/perplexity tradeoffs. **Done**
+   2026-08-05: converted the merged fine-tune to GGUF and quantized to
+   Q4_K_M/Q5_K_M/Q8_0 via `quantize/convert_and_quantize.sh`; benchmarked
+   perplexity + tokens/sec for each (see `eval/EVAL.md`); kept Q4_K_M as
+   the shipped default (best size/speed, ~5.6% perplexity gap vs. Q8_0).
 5. RAG index + retrieval-grounded generation demo.
 6. Package as Ollama model + simple UI; write up README + learnings.

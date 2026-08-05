@@ -1,0 +1,10 @@
+| model                          |       size |     params | backend    | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+| qwen3 4B Q4_K - Medium         |   2.32 GiB |     4.02 B | CPU        |      10 |           pp128 |         72.17 ± 1.57 |
+| qwen3 4B Q4_K - Medium         |   2.32 GiB |     4.02 B | CPU        |      10 |            tg64 |         13.77 ± 0.50 |
+| qwen3 4B Q5_K - Medium         |   2.69 GiB |     4.02 B | CPU        |      10 |           pp128 |         19.56 ± 1.31 |
+| qwen3 4B Q5_K - Medium         |   2.69 GiB |     4.02 B | CPU        |      10 |            tg64 |         11.75 ± 0.40 |
+| qwen3 4B Q8_0                  |   3.98 GiB |     4.02 B | CPU        |      10 |           pp128 |         23.60 ± 1.88 |
+| qwen3 4B Q8_0                  |   3.98 GiB |     4.02 B | CPU        |      10 |            tg64 |          8.85 ± 0.47 |
+
+build: 1c3c967 (1)

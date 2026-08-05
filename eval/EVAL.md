@@ -59,3 +59,28 @@ Few-shot examples used:
 
 > : non risponde.
 
+## 2026-08-05 -- Quantization benchmark
+
+Ran `quantize/convert_and_quantize.sh training/output/qwen3_4b_qlora/merged`
+(see skills/quantize/SKILL.md) to produce GGUF variants of the merged
+fine-tuned model, then benchmarked each with `llama-perplexity` (held-out
+`data/processed/pretrain_val.txt`, `-c 256` -- the val set is tiny, only
+~881 tokens, so treat these as directional, not statistically tight) and
+`llama-bench` (`-p 128 -n 64`, CPU-only, 10 threads, no GPU offload).
+
+| Quant  | Size     | Perplexity        | Prompt proc. (t/s) | Generation (t/s) |
+|--------|----------|--------------------|---------------------|-------------------|
+| Q4_K_M | 2.32 GiB | 33.29 +/- 5.50     | 72.17 +/- 1.57      | 13.77 +/- 0.50    |
+| Q5_K_M | 2.69 GiB | 32.19 +/- 5.26     | 19.56 +/- 1.31      | 11.75 +/- 0.40    |
+| Q8_0   | 3.98 GiB | 31.51 +/- 5.15     | 23.60 +/- 1.88      | 8.85 +/- 0.47     |
+
+**Decision: keep Q4_K_M** as the shipped quant. It's the smallest and
+fastest, and the perplexity gap vs. Q8_0 (near-lossless baseline) is only
+~5.6% relative -- not worth 1.7x the size or the generation-speed hit.
+Q5_K_M's prompt-processing number looks anomalously low relative to Q4_K_M
+and Q8_0 (non-monotonic) -- likely bench noise from the very short `-p 128`
+prompt / thread contention on this machine rather than a real regression;
+worth re-running with a larger prompt if this ever needs to be revisited.
+The Q5_K_M/Q8_0 GGUF files were deleted after this benchmark to reclaim
+disk space (regenerable any time via `quantize/convert_and_quantize.sh`).
+
