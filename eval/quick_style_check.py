@@ -16,6 +16,21 @@ Generation stops at the first newline (a fragment/post boundary in this
 corpus) rather than running to --max-new-tokens, which is just a fallback
 cap.
 
+Caveat: SEED_WORDS are used simplistically as a literal continuation
+prefix (`f"\n{seed_word}"` appended straight after the prompt) -- the model
+is completing "...mare" as the start of a sentence, not writing "about"
+the sea as a theme. Don't over-read thematic relevance in the samples;
+they're testing voice/style continuation, not topical steering. A model
+that free-associates away from the seed word's meaning is not necessarily
+failing.
+
+TODO: try generating longer (e.g. --max-new-tokens 200+) and then
+truncating post-hoc at a good sentence/clause boundary, rather than
+relying on stop_strings=["\n"] alone -- the current newline-stop can end a
+fragment on a very short/incomplete-feeling beat (see min_new_tokens
+guard) when a slightly longer generation would have produced a more
+satisfying complete thought.
+
 Output is always printed to stdout, and (unless --no-log) also appended to
 --log-file (default eval/EVAL.md) with a timestamp/model header, per
 skills/eval/SKILL.md's "log everything qualitatively in eval/EVAL.md"
@@ -48,6 +63,10 @@ PERSONA = (
     "con tono intimo, immagini oniriche/malinconiche, frasi brevi."
 )
 
+# NB: these are literal continuation prefixes ("<prompt>\n<seed_word>"), not
+# topical prompts -- the model completes the seed word as the start of a
+# sentence/fragment. See the module docstring's caveat before reading too
+# much thematic meaning into a given seed's output.
 SEED_WORDS = ["mare", "autobus", "insonnia", "specchio", "citofono"]
 
 

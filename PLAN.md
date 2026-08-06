@@ -501,5 +501,11 @@ slaivina/
    Q4_K_M/Q5_K_M/Q8_0 via `quantize/convert_and_quantize.sh`; benchmarked
    perplexity + tokens/sec for each (see `eval/EVAL.md`); kept Q4_K_M as
    the shipped default (best size/speed, ~5.6% perplexity gap vs. Q8_0).
-5. RAG index + retrieval-grounded generation demo.
+5. RAG index + retrieval-grounded generation demo. **Done** 2026-08-06:
+   `rag/build_index.py` embeds `data/processed/posts.jsonl` (one chunk per
+   post) with `intfloat/multilingual-e5-small` into a persistent ChromaDB
+   collection (`rag/index/`, gitignored); `rag/query.py` retrieves top-k
+   chunks and generates a grounded answer via a running `llama-server`
+   serving the Q4_K_M quant. End-to-end smoke-tested successfully (see
+   skills/rag/SKILL.md for the run commands).
 6. Package as Ollama model + simple UI; write up README + learnings.

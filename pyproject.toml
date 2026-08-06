@@ -27,6 +27,10 @@ train = [
   "datasets>=2.20",
   "torch>=2.4",
 ]
+rag = [
+  "chromadb>=0.5",
+  "sentence-transformers>=3.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -36,4 +40,4 @@ build-backend = "hatchling.build"
 # This is a scripts/-based project, not an importable package (yet) --
 # an explicit (empty) include list keeps `uv`/hatchling from erroring out
 # looking for a src/slaivina or slaivina/ package directory.
-include = ["scripts", "configs", "training"]
+include = ["scripts", "configs", "training", "rag"]

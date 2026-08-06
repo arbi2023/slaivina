@@ -233,3 +233,4 @@ __marimo__/
 /unsloth_compiled_cache/
 /quantize/output/
 !quantize/bench/*.log
+/rag/index/
