@@ -4220,7 +4220,6 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "python-dateutil", specifier = ">=2.9" },
     { name = "pyyaml", specifier = ">=6.0" },
-<<<<<<< HEAD
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.16.1" },
     { name = "sentence-transformers", marker = "extra == 'rag'", specifier = ">=3.0" },
     { name = "torch", marker = "extra == 'train'", specifier = ">=2.13.0" },
