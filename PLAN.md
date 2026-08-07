@@ -237,6 +237,80 @@ is lost by starting here instead of the lower-level stack.
 - LoRA adapter weights (small, tens of MB) + merged full-precision model
   checkpoint (`merge_and_unload`) ready for quantization.
 
+### Path to further improve output quality (before publishing)
+
+Current qualitative checks (`eval/EVAL.md`, `eval/quick_style_check.py`)
+show the model is not yet satisfying: with a small corpus (~397 posts) and
+too many epochs, the model tips from *generalizing style* into
+*memorizing/overfitting specific fragments*, and even at reasonable epoch
+counts, generation quality is inconsistent. Before publishing anywhere
+(even as a learning artifact), it's worth deliberately working through the
+levers available, roughly in order of effort/risk:
+
+1. **Re-tune the cheap knobs first**: epochs, learning rate, LoRA rank/alpha,
+   and generation-time sampling params (temperature, repetition penalty,
+   `min_new_tokens`/`max_new_tokens`, stop strings). These are free to
+   iterate on (no new data, no new training code) and the current setup
+   hasn't been swept systematically — only a handful of epoch counts were
+   tried. Track perplexity **and** qualitative samples per setting in
+   `eval/EVAL.md`, since perplexity alone can mask overfitting-driven
+   memorization (a model can get *better* perplexity on training-adjacent
+   text while getting *worse* at genuinely novel generation).
+   - **Done (2026-08-07), generation-side**: swept temperature/
+     repetition_penalty in `eval/quick_style_check.py` (samples in
+     `eval/EVAL.md`). Finding: lowering temperature *alone* (no repetition
+     penalty) made rambling/looping *worse*, not better — sampling at
+     lower temperature narrows toward the highest-probability
+     continuation, which can reinforce a self-referential loop instead of
+     escaping it. `repetition_penalty=1.15` combined with
+     `temperature=0.8` gave the most coherent, least repetitive fragments
+     among configs tried, and is now the script's default. Still pending:
+     training-side sweep (LoRA rank/alpha, learning rate).
+2. **Data-side levers before touching the objective**: with such a small
+   corpus, per-epoch overfitting risk is largely a data-volume problem.
+   Options: augment via paraphrasing/back-translation (risk: dilutes the
+   very voice being targeted — use cautiously), dedupe/near-dedupe existing
+   posts more aggressively so no near-identical passage gets over-weighted,
+   or simply accept a data ceiling and treat this project as bumping into
+   the "how much style can you learn from ~400 short texts" limit — itself
+   a useful, honest learning-project finding to document.
+3. **Supervised refinement loop (rate/pass/reject → curated corpus)**: once
+   1–2 are exhausted, generate a batch of fragments from the current
+   fine-tuned model, have the blog author rate/pass/reject each one, and
+   accumulate an approved corpus over time (store as
+   `data/processed/rated_fragments.jsonl`, alongside `posts.jsonl`, with a
+   `label: pass|reject` field and generation metadata for provenance).
+   Two ways to use this corpus once it's large enough:
+   - **Continued SFT on approved fragments only** — simplest: just add the
+     pass-rated fragments to the training set for another CPT pass. Treats
+     "passed" generations as more of the same distribution to imitate. Easy
+     to reason about, but doesn't use the *rejected* examples at all, so it
+     wastes half the signal collected.
+   - **Preference optimization (DPO/ORPO)** on pass/reject pairs treated as
+     chosen/rejected — makes explicit use of *both* signals: pushes the
+     model's output distribution away from what got rejected, not just
+     toward what got approved. More principled for a "author knows it when
+     they see it" quality signal that's hard to write down as a training
+     objective otherwise, but needs enough paired examples per
+     prompt/context to be stable, and is one more training method to learn/
+     debug (worth it here specifically *because* this is a learning
+     project).
+   Realistically this only becomes worth doing once dozens–low-hundreds of
+   rated examples exist — building the rating tool and rated-corpus format
+   is cheap and can start immediately, even if actual retraining on it
+   waits.
+4. **Reconsider model size only as a last resort**: if none of the above
+   meaningfully improves felt quality, the ceiling may be intrinsic to
+   using a 4B model with a QLoRA adapter on this little data. Moving to a
+   full fine-tune (rank-permitting) or a larger base model are valid next
+   experiments, but expensive relative to 1–3, so worth trying last.
+
+The guiding principle: don't reach for a new training *method* (DPO,
+bigger model) before exhausting cheaper *tuning* and *data* levers on the
+current method — the failure mode observed so far (repetitive/rambling,
+memorized-feeling output) looks like a hyperparameter/data-volume problem
+first, not necessarily an objective-function problem.
+
 ---
 
 ## Quantization
@@ -323,6 +397,27 @@ rag/
   server.py           # optional small FastAPI wrapper
 ```
 
+### Fine-tuning vs RAG: the honest takeaway for a corpus this small
+
+Fine-tuning and RAG aren't really competing solutions to the same problem —
+they answer different questions:
+
+- "Should this text **sound like** the author?" → weights (fine-tuning),
+  because voice is a distributed property.
+- "Should this text **contain specific true content** from the corpus?" →
+  context (RAG or full-stuffing), because facts are point properties, not
+  distributed ones, and don't survive compression into a model this size
+  trained on this little data.
+
+Given that our corpus is small enough to fully fit in context, the marginal
+value of RAG's retrieval mechanism specifically (versus just stuffing
+everything) is arguably close to zero right now — its main advantage
+(scaling past context limits) isn't yet needed. What retrieval buys us
+today is smaller prompts/faster inference, at the cost of the
+relevance-quality risk already observed in practice (see
+`skills/rag/SKILL.md` guardrails). That's a genuine engineering tradeoff,
+not a fundamental ML one.
+
 ---
 
 ## Deployment and serving
@@ -398,22 +493,124 @@ for everything.**
   a CI runner that already provides Python (e.g. a bare-metal cron box) —
   a secondary concern, not a reason to containerize the whole project.
 
-### Future CI and CD plans (not started)
+### CI and CD plan
 
-Ideas to revisit later, explicitly **not implemented yet**:
-- A scheduled workflow (e.g. GitHub Actions, weekly) re-running
-  `scripts/scrape.py --refresh` to pick up new posts, then `clean.py`/
-  `make_sft_pairs.py`. Since raw/processed data is gitignored, this would
-  need to push somewhere other than the git repo — e.g. open a PR with only
-  small sample diffs, or push the refreshed dataset to a private HF
-  *dataset* repo (parallel to the model repo).
-- A build pipeline that, on a training run, merges the LoRA adapter,
-  quantizes to GGUF, runs `eval/perplexity.py`/`style_similarity.py`, and
-  uploads the result to the HF Hub *model* repo (with the eval numbers in
-  the model card) — turning §4/§5's manual steps into one automated job.
-- A separate, optional `deployment/docker-compose.yml` build/publish step
-  for the serving stack described above (`llama-server`/Ollama + RAG API),
-  kept independent from the model-artifact pipeline.
+**Constraint that shapes this plan**: no self-hosted runner is available —
+only GitHub-hosted runners (no GPU, ~14GB free disk on `ubuntu-latest`).
+Training and quantization (7.5GB f16 GGUF intermediate alone) must
+therefore stay a **local, manual step on this machine**, same as today.
+CI/CD's job is to pick up cleanly *after* a quantized artifact already
+exists locally, not to reproduce the training/quantization pipeline itself.
+
+**Why not conventional per-push CI**: this repo has sparse commit cadence
+and no dense, fast-changing test surface — Dependabot already covers
+dependency/vulnerability scanning, and GitHub code scanning (if enabled)
+covers static analysis. Inventing a synthetic test suite just to have
+something for a CI workflow to run would be process for its own sake. A
+cheap `ruff check` lint gate is reasonable to keep (near-zero cost, catches
+real style/error issues), but there's no separate `pytest` step planned
+unless real tests emerge naturally out of future script changes.
+
+**Why not semantic-release for versioning**: `semantic-release` infers
+version bumps from conventional-commit messages across *all* commits since
+the last release — but commits here mix unrelated concerns (RAG glue,
+docs, scraper fixes, training config) that have nothing to do with "did the
+model change." A model's meaningful version axis is "did the weights
+change, and how much" (new base model = major, retrain/new data = minor,
+requant only = patch) — a judgment call tied to an actual training/quant
+event, not something safely inferred from commit prose. A stray `fix:`
+commit to `rag/query.py` would falsely trigger a "new model version" under
+default semantic-release rules.
+
+**Chosen design**: a **GitHub Release** (manually tagged, e.g.
+`model-v1.2.0`) is both the artifact-storage mechanism *and* the versioning
+trigger, published by hand right after a local quantization run you're
+happy with. This keeps versioning deliberate (matches how sparse/manual
+training runs already are) while staying fully GitHub-hosted-runner-safe,
+since the workflow only ever needs to download an already-produced release
+asset (~2.3GB GGUF), never train or quantize anything itself.
+
+**Conventional lint-only CI was considered and dropped**: Dependabot
+already covers dependency/vuln scanning, and a `ruff check` gate adds
+little given the sparse, low-risk commit cadence here — not worth a
+dedicated workflow. Run `uv run ruff check .` locally/on-demand instead if
+desired.
+
+**Scheduled data-refresh automation was considered and dropped**: a
+weekly-cron `refresh-data.yml` (re-running `scripts/scrape.py --refresh` +
+`clean.py` + `make_sft_pairs.py`, pushing results to a private HF dataset
+repo) is technically feasible on GitHub-hosted runners, but doesn't fit
+this project's actual cadence — the blog is not updated frequently enough
+to justify scheduled re-scraping, and training itself only happens as a
+deliberate, infrequent, manual decision (per the versioning convention
+above), so pre-fetching data on a fixed schedule has no consumer to serve.
+It would add a recurring workflow, an extra `HF_TOKEN` exposure, and a
+second HF dataset repo to maintain, for a problem a one-line local command
+already solves. Instead: run
+`scripts/scrape.py --refresh && scripts/clean.py && scripts/make_sft_pairs.py`
+locally as step 0 whenever a new training run is starting. Revisit
+automation only if the blog's publishing pace picks up enough to make
+manual refresh genuinely burdensome.
+
+#### Model publish (GitHub-hosted, triggered by GitHub Release) — `.github/workflows/publish-model.yml`
+- **Local step (manual, on this machine, scripted)**: train →
+  merge → `quantize/convert_and_quantize.sh` → benchmark
+  (`eval/EVAL.md`) → when happy with the result, run
+  `quantize/create_release.sh <version>` (new script, see below) to tag
+  and publish the GitHub Release with the chosen GGUF quant(s) attached.
+  This is the deliberate "is this good enough to publish" gate — same
+  judgment call as today, just now also the versioning decision, and
+  scripted rather than done by hand through the GitHub UI each time.
+- **Automated step, triggered `on: release: types: [published]`**: the
+  workflow downloads its own release's assets (`gh release download` or
+  the `release` event payload's asset URLs — no repo-clone-sized checkout
+  needed beyond `eval/EVAL.md`/templates), renders the model card (base
+  model, LoRA config, quant benchmark table, licensing/ethics note per
+  [Licensing, ethics, attribution](#licensing-ethics-attribution),
+  release tag as the HF Hub revision/version), and uploads the GGUF(s) +
+  LoRA adapter (also attached to the release, or fetched from wherever it
+  lives) + model card to the HF Hub model repo via `huggingface_hub`
+  (`HF_TOKEN` stored as a **GitHub Actions repo secret** — safe here since
+  the job only reads a release asset, no model weights or GPU work happen
+  on GitHub's side beyond a file transfer).
+- Net effect: creating the GitHub Release *is* "ship this version" — no
+  separate manual HF upload step, no self-hosted runner, no
+  commit-message-driven guessing about whether a new model version exists.
+
+#### Release creation script/procedure — `quantize/create_release.sh`
+Rather than tagging and attaching assets by hand through the GitHub UI
+each time, a small script wraps the `gh` CLI so releasing a model version
+is a single repeatable command:
+- Usage: `quantize/create_release.sh <version> [gguf-path...]` (e.g.
+  `quantize/create_release.sh v1.2.0 quantize/output/slaivina-4b-q4_k_m.gguf`).
+- Steps the script performs: validate the version string (semver-like,
+  `vMAJOR.MINOR.PATCH`), confirm the given GGUF file(s) exist and print
+  their size for a sanity check, `git tag model-<version>` +
+  `git push origin model-<version>`, then
+  `gh release create model-<version> <gguf-path...> --title ... --notes ...`
+  (notes can pull the latest benchmark line from `eval/EVAL.md`
+  automatically, or accept a `--notes-file`).
+- Requires the `gh` CLI authenticated locally (already the case for a repo
+  owner) — this script only ever runs on this machine, never in CI; the
+  GitHub Release it creates is what *triggers* `publish-model.yml`.
+- Version-numbering convention (manual judgment call, not automated): major
+  = new base model, minor = retrain/new data/method (e.g. a DPO pass),
+  patch = requantization only (same underlying weights).
+
+#### Deployment stack build (GitHub-hosted, on tag/release) — optional, later
+- Build/publish the `deployment/docker-compose.yml` serving stack
+  (`llama-server`/Ollama + optional RAG API) — safe on GitHub-hosted
+  runners since weights are pulled from HF Hub at container start rather
+  than baked into the image (see
+  [Docker versus Hugging Face Hub for distribution](#docker-versus-hugging-face-hub-for-distribution)).
+  Lower priority; only worth doing once the serving stack itself exists.
+
+#### Summary of what runs where
+| Step | Runner | Trigger | Touches model weights? |
+|---|---|---|---|
+| `quantize/create_release.sh` | local (this machine) | manual, run after a happy benchmark | reads local GGUF, no training |
+| `publish-model.yml` | GitHub-hosted | GitHub Release published (via the script above) | reads a release asset, no training/quantization |
+| deployment stack build | GitHub-hosted | on tag (later) | no (pulls from HF Hub) |
 
 ---
 
@@ -509,3 +706,13 @@ slaivina/
    serving the Q4_K_M quant. End-to-end smoke-tested successfully (see
    skills/rag/SKILL.md for the run commands).
 6. Package as Ollama model + simple UI; write up README + learnings.
+7. CI/CD: `quantize/create_release.sh` to tag/publish a GitHub Release with
+   the quantized GGUF, triggering a GitHub-hosted `publish-model.yml`
+   workflow that uploads it + a rendered model card to HF Hub — see
+   [CI and CD plan](#ci-and-cd-plan). (Lint-only CI and scheduled data
+   refresh were considered and deliberately dropped — see that section.)
+8. Publish: HF Hub model page (model card with usage instructions,
+   benchmark table, licensing/ethics note) + a repo-level review pass on
+   instructions for using the other tools in this repo (scraper, training,
+   quantization, eval, RAG) so the project is usable end-to-end by someone
+   else, not just as a personal working log.

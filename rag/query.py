@@ -94,8 +94,16 @@ def generate(server_url: str, system_prompt: str, user_prompt: str) -> str:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": 0.9,
+            # temperature/repetition_penalty per the eval/quick_style_check.py
+            # sweep (see PLAN.md#path-to-further-improve-output-quality-
+            # before-publishing): repetition_penalty=1.15 + temperature=0.8
+            # gave the least repetitive/rambling output. NB: RAG-specific
+            # generation quality (length/incoherence) is a separate, lower-
+            # priority known issue -- see the "improve-rag-generation-
+            # quality" note in skills/rag/SKILL.md.
+            "temperature": 0.8,
             "top_p": 0.95,
+            "repeat_penalty": 1.15,
         }
     ).encode("utf-8")
     req = urllib.request.Request(

@@ -84,3 +84,189 @@ worth re-running with a larger prompt if this ever needs to be revisited.
 The Q5_K_M/Q8_0 GGUF files were deleted after this benchmark to reclaim
 disk space (regenerable any time via `quantize/convert_and_quantize.sh`).
 
+
+## 2026-08-07 12:26 UTC -- model: `training/output/qwen3_4b_qlora/merged`
+
+Generation params: temperature=0.9, top_p=0.95, repetition_penalty=1.0
+
+Few-shot examples used:
+- Come se metti una croce sopra al presepe: fai lo spoilerone.
+- Quando l'ho visto m'è rimasto tipo tatuaggio sul cervello
+- Quindi la morale è: anche se la barzelletta non fa ridere, anche se il volume non c'è, se la bella gnocca ride, la risata è contagiosa.
+- Come _self non c'è nessuno.
+
+**seed: `mare`**
+
+> santo, me sento un pesce nell'acqua
+
+**seed: `autobus`**
+
+> 2000: era l'epoca in cui il cioccolato era dolce e la vita era dolce.
+
+**seed: `insonnia`**
+
+> , sconfinata, infinita, con l'occhio che sputa fumo.
+
+**seed: `specchio`**
+
+> . specchio.
+
+**seed: `citofono`**
+
+> : 'Ciao! C'ho gli occhiali da sole!'. Il volume è alto, il tono è altissimo, mi chiamo Stefano, il cazzo di cesso. Io ho un cazzo di cesso, c'entra, me lo sono costruito.
+
+
+## 2026-08-07 12:27 UTC -- model: `training/output/qwen3_4b_qlora/merged`
+
+Generation params: temperature=0.9, top_p=0.95, repetition_penalty=1.15
+
+Few-shot examples used:
+- Come se metti una croce sopra al presepe: fai lo spoilerone.
+- Quando l'ho visto m'è rimasto tipo tatuaggio sul cervello
+- Quindi la morale è: anche se la barzelletta non fa ridere, anche se il volume non c'è, se la bella gnocca ride, la risata è contagiosa.
+- Come _self non c'è nessuno.
+
+**seed: `mare`**
+
+> , ciuccio, ciao. Ecco che si rifiuta di morire.
+
+**seed: `autobus`**
+
+> . no, autobus sull'elio.
+
+**seed: `insonnia`**
+
+> e stile life. E poi qua ci passa tutto: i miei problemi, le mie paure. Che a parte le paure… sono un po’ come una pila che sta per finire. Sono io, la pila e il cazzo di iPhone.
+
+**seed: `specchio`**
+
+> della morte.
+
+**seed: `citofono`**
+
+> . ma che cazzo di citofono? Il mio figlio non ha un citofono… È come se fossero le stesse cose: il vetro rotto nel giardino e i cinghie che si strappano. Ma in realtà no, sono due cose diverse! Cioè sì, per esempio io mi sento male quando vedo
+
+
+## 2026-08-07 12:29 UTC -- model: `training/output/qwen3_4b_qlora/merged`
+
+Generation params: temperature=0.7, top_p=0.95, repetition_penalty=1.0
+
+Few-shot examples used:
+- Come se metti una croce sopra al presepe: fai lo spoilerone.
+- Quando l'ho visto m'è rimasto tipo tatuaggio sul cervello
+- Quindi la morale è: anche se la barzelletta non fa ridere, anche se il volume non c'è, se la bella gnocca ride, la risata è contagiosa.
+- Come _self non c'è nessuno.
+
+**seed: `mare`**
+
+> , vento, giallo. Il giallo dei gatti. Il giallo della merda. Il giallo delle zanzare. Il giallo delle barzellette.
+
+**seed: `autobus`**
+
+> : è il riscatto. È l'ultimo passaggio. È la fine del mondo.
+
+**seed: `insonnia`**
+
+> , tè, metti la birra, ridi: il tè va in tè, la birra va in birra, la ridi va in ridi. Ma il tè non va in birra. Non c'è legame. Come il cazzo e la merda. La merda è la merda. Il cazzo è il cazzo. È un cazzo di
+
+**seed: `specchio`**
+
+> cagionevole, lo schermo cagionevole, l'aria cagionevole.
+
+**seed: `citofono`**
+
+> : 'non c'è nessuno!'… ma c'è l'aria… c'è il rumore… c'è l'umore… c'è l'aria… c'è il rumore… c'è l'umore…
+
+
+## 2026-08-07 12:30 UTC -- model: `training/output/qwen3_4b_qlora/merged`
+
+Generation params: temperature=0.8, top_p=0.95, repetition_penalty=1.15
+
+Few-shot examples used:
+- Come se metti una croce sopra al presepe: fai lo spoilerone.
+- Quando l'ho visto m'è rimasto tipo tatuaggio sul cervello
+- Quindi la morale è: anche se la barzelletta non fa ridere, anche se il volume non c'è, se la bella gnocca ride, la risata è contagiosa.
+- Come _self non c'è nessuno.
+
+**seed: `mare`**
+
+> sereno. o quasi. stiamo male tutti quanti. ma io sto bene perché ho le maniere di un pesce. E tu? Se sei umano e non sai come stare felice... allora smettila di soffrire e torna a essere un pesce. È più facile.
+
+**seed: `autobus`**
+
+> a trecento chilometri orari. Non so se esiste.
+
+**seed: `insonnia`**
+
+> e rabbia.
+
+**seed: `specchio`**
+
+> . specchio. specchio.
+
+**seed: `citofono`**
+
+> : 238. Ciao! La mia figlia mi chiede che cazzo stiamo facendo qua… sto cercando il culo della luna
+
+
+## 2026-08-07 12:58 UTC -- model: `training/output/qwen3_4b_qlora/merged`
+
+Generation params: temperature=0.8, top_p=0.95, repetition_penalty=1.15
+
+Few-shot examples used:
+- Come se metti una croce sopra al presepe: fai lo spoilerone.
+- Quando l'ho visto m'è rimasto tipo tatuaggio sul cervello
+- Quindi la morale è: anche se la barzelletta non fa ridere, anche se il volume non c'è, se la bella gnocca ride, la risata è contagiosa.
+- Come _self non c'è nessuno.
+
+**seed: `mare`**
+
+> rosso. le mani sull'erba. un cazzo di fiore che si muove da solo. un gattino con l'uomo nel palazzo. il cesso in casa… e invece no. è il bagaglio. ma il bagaglio è più bello dei gatti. E tu? Tu sei il bagaglio. Lì dentro tutto quello
+
+**seed: `autobus`**
+
+> vuoto. basta un po’ di vapore e ci sono le stelle. ma tu sei sull’autostop che corre veloce e non senti niente. ti muovi a tutta birra dentro una gabbia d’acciao. Non riconosci mai le stelle perché te ne stai nella macchina.
+
+**seed: `insonnia`**
+
+> : come un gattino che si accorge che la sveglia sta funzionando e inizia a soffio. Poi però sputa nel bicchiere. È come quando ti stai arrampicando per vedere le nuvole e tu sei già su. Arriva quel momento dove non sai più di cosa parli, ma il vento sa tutto.
+
+**seed: `specchio`**
+
+> , specchio nelle tane… mi trovo nel labirinto delle tane.
+
+**seed: `citofono`**
+
+> che dice: "ciao, sei tu? Ciao. Si. Ah sì! Ciao, scusa, ero nella mia cabana." Tipo quando entri in un negozio e vedi tutti i prodotti che stanno a terra… e non sai bene cosa comprare.
+
+
+## 2026-08-07 12:59 UTC -- model: `training/output/qwen3_4b_qlora/merged`
+
+Generation params: temperature=0.8, top_p=0.95, repetition_penalty=1.15
+
+Few-shot examples used:
+- Come se metti una croce sopra al presepe: fai lo spoilerone.
+- Quando l'ho visto m'è rimasto tipo tatuaggio sul cervello
+- Quindi la morale è: anche se la barzelletta non fa ridere, anche se il volume non c'è, se la bella gnocca ride, la risata è contagiosa.
+- Come _self non c'è nessuno.
+
+**seed: `mare`**
+
+> a cielo aperto? beh… no. il mare si chiude e torna indietro quando ti guardano nel culo.
+
+**seed: `autobus`**
+
+> che vanno nel vuoto. Il mondo come un autobus senza rotelle e tu sei dentro, ma stanco.
+
+**seed: `insonnia`**
+
+> . come un elefante che mangia pomodoro. ti sforzi e… si blocca tutto. Poi ricomincia da zero. Lo stesso schema per l'anima. Si riempie di storie. E poi viene il momento in cui le storie vanno buttate giù. Come i vestiti. Ti piaceva il blu? Il
+
+**seed: `specchio`**
+
+> . specchio delle merde.
+
+**seed: `citofono`**
+
+> ? Ciao! No. Non c'era niente. Soprattutto non era lì per te.
+

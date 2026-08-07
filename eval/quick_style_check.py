@@ -5,8 +5,22 @@ Not a rigorous eval (see PLAN.md#evaluation for perplexity/style-similarity,
 still to be scaffolded) -- this is a cheap "did continued-pretraining
 actually move the model toward the corpus's voice" sanity check you can run
 by eye right after training, before spending time on quantization. Runs
-entirely on the fp16 merged model (or the base model, for comparison), so
-it isolates training effects from any later quantization artifacts.
+against the merged model (default: 4-bit NF4 via bitsandbytes/Unsloth for
+lower VRAM use; --full-precision for fp16), or the base model for
+comparison.
+
+**GPU-only, dev-side tool -- requires Unsloth (CUDA)**: this script (like
+training/pretrain.py) is for the repo owner to sanity-check a training run
+before quantizing, and needs a CUDA GPU. This is *not* a constraint on the
+shipped end product: the actual distributed artifact (the GGUF Q4_K_M
+quant, served via llama.cpp/Ollama -- see quantize/convert_and_quantize.sh
+and skills/quantize/SKILL.md) is explicitly built for CPU-only inference
+and already runs fine on a GPU-less laptop (benchmarked ~13.8 tok/s
+generation, see eval/EVAL.md). --load-in-4bit here is a *different*
+quantization (bitsandbytes NF4, training-toolchain-side) than the shipped
+GGUF quant -- don't conflate the two. Final validation before shipping a
+new version should test the actual GGUF via llama-cli/llama-server, not
+this script.
 
 Generates a few short completions from a fixed persona + few-shot prompt
 (the same style of prompt PLAN.md#deployment-and-serving describes using
@@ -31,6 +45,18 @@ fragment on a very short/incomplete-feeling beat (see min_new_tokens
 guard) when a slightly longer generation would have produced a more
 satisfying complete thought.
 
+Recommended generation params (defaults below): temperature=0.8,
+repetition_penalty=1.15. Found via a small manual sweep (2026-08-07, see
+eval/EVAL.md) after user feedback that output was too long/repetitive/
+rambling -- notably, lowering temperature *alone* (no repetition penalty)
+made repetition/looping *worse*, not better, since sampling at a lower
+temperature narrows toward the highest-probability continuation, which can
+reinforce a self-referential loop rather than escape it. repetition_penalty
+is the targeted fix for repetition; temperature is a separate axis
+(overall randomness/creativity) -- don't conflate the two. This same
+combination is worth carrying over to any downstream serving config
+(Ollama Modelfile / llama-server request params), not just this script.
+
 Output is always printed to stdout, and (unless --no-log) also appended to
 --log-file (default eval/EVAL.md) with a timestamp/model header, per
 skills/eval/SKILL.md's "log everything qualitatively in eval/EVAL.md"
@@ -38,15 +64,23 @@ guardrail -- otherwise these samples only exist in a terminal scrollback.
 
 Usage
 --------------------------------------------------------------------
-    # fine-tuned merged model (default) -- prints to stdout and appends
-    # to eval/EVAL.md
+    # fine-tuned merged model (default: 4-bit NF4) -- prints to stdout and
+    # appends to eval/EVAL.md
     uv run eval/quick_style_check.py
+
+    # test the fp16 intermediate itself (e.g. right after a training
+    # change, before quantizing) -- needs more VRAM
+    uv run eval/quick_style_check.py --full-precision
 
     # base (non-fine-tuned) model, for comparison
     uv run eval/quick_style_check.py --model unsloth/Qwen3-4B-Instruct-2507-unsloth-bnb-4bit
 
     # skip the log-file append (stdout only)
     uv run eval/quick_style_check.py --no-log
+
+    # override generation params (defaults are already the recommended
+    # temperature=0.8/repetition_penalty=1.15 combo)
+    uv run eval/quick_style_check.py --temperature 0.9 --repetition-penalty 1.0
 """
 
 from __future__ import annotations
@@ -87,7 +121,27 @@ def main() -> int:
         "fine-tuned model)",
     )
     parser.add_argument("--max-seq-length", type=int, default=1024)
-    parser.add_argument("--load-in-4bit", action="store_true")
+    parser.add_argument(
+        "--load-in-4bit",
+        dest="load_in_4bit",
+        action="store_true",
+        default=True,
+        help="load via bitsandbytes NF4 (default: on). This is a "
+        "training-toolchain-side quantization for fitting VRAM during "
+        "this pre-quantization check -- it is NOT the shipped GGUF Q4_K_M "
+        "quant (see quantize/convert_and_quantize.sh and "
+        "skills/quantize/SKILL.md). Final validation before shipping "
+        "should test the actual GGUF via llama-cli/llama-server, not "
+        "this script.",
+    )
+    parser.add_argument(
+        "--full-precision",
+        dest="load_in_4bit",
+        action="store_false",
+        help="load the fp16 merged model instead of NF4 (needs more "
+        "VRAM; rarely necessary -- use to test the pre-quantization "
+        "intermediate itself, e.g. after a training change).",
+    )
     parser.add_argument("--fewshot-n", type=int, default=4)
     parser.add_argument("--max-new-tokens", type=int, default=80)
     parser.add_argument(
@@ -96,6 +150,29 @@ def main() -> int:
         default=12,
         help="floor on generated tokens before the newline stop condition "
         "is allowed to end generation, so fragments aren't just one word",
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.8,
+        help="sampling temperature (default: 0.8 -- lower than the "
+        "original 0.9. NB: lowering temperature alone (without a "
+        "repetition penalty) was found to *worsen* repetition/looping, "
+        "since do_sample narrows toward the top continuation, which can "
+        "reinforce a loop rather than escape it -- see PLAN.md#path-to-"
+        "further-improve-output-quality-before-publishing)",
+    )
+    parser.add_argument("--top-p", type=float, default=0.95)
+    parser.add_argument(
+        "--repetition-penalty",
+        type=float,
+        default=1.15,
+        help="discourage repeated tokens (1.0 = disabled/no penalty, "
+        ">1.0 penalizes repeats). Default 1.15 chosen from a small "
+        "sweep: repetition_penalty=1.15 + temperature=0.8 gave the "
+        "shortest, least rambling/repetitive fragments among the "
+        "configs tried (see eval/EVAL.md sweep entries and PLAN.md#path-"
+        "to-further-improve-output-quality-before-publishing).",
     )
     parser.add_argument(
         "--posts-path", type=Path, default=Path("data/processed/posts.jsonl")
@@ -139,8 +216,9 @@ def main() -> int:
                 max_new_tokens=args.max_new_tokens,
                 min_new_tokens=args.min_new_tokens,
                 do_sample=True,
-                temperature=0.9,
-                top_p=0.95,
+                temperature=args.temperature,
+                top_p=args.top_p,
+                repetition_penalty=args.repetition_penalty,
                 pad_token_id=tokenizer.eos_token_id,
                 # These are meant to be single short fragments (like the
                 # few-shot examples), not free-running text -- stop as
@@ -160,7 +238,11 @@ def main() -> int:
         print()
 
     if not args.no_log:
-        append_log(args.log_file, args.model, fewshot, results)
+        gen_params = (
+            f"temperature={args.temperature}, top_p={args.top_p}, "
+            f"repetition_penalty={args.repetition_penalty}"
+        )
+        append_log(args.log_file, args.model, gen_params, fewshot, results)
         print(f"Appended results to {args.log_file}", file=sys.stderr)
 
     return 0
@@ -169,6 +251,7 @@ def main() -> int:
 def append_log(
     log_file: Path,
     model_name: str,
+    gen_params: str,
     fewshot: list[str],
     results: list[tuple[str, str]],
 ) -> None:
@@ -183,6 +266,7 @@ def append_log(
             )
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         f.write(f"\n## {timestamp} -- model: `{model_name}`\n\n")
+        f.write(f"Generation params: {gen_params}\n\n")
         f.write("Few-shot examples used:\n")
         for post in fewshot:
             f.write(f"- {post}\n")
