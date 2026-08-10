@@ -24,7 +24,7 @@ dev = [
 ]
 train = [
   "unsloth>=2025.1",
-  "datasets>=2.20",
+  "datasets>=5.0.1",
   "torch>=2.13.0",
 ]
 rag = [
