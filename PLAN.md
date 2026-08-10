@@ -264,8 +264,28 @@ levers available, roughly in order of effort/risk:
      continuation, which can reinforce a self-referential loop instead of
      escaping it. `repetition_penalty=1.15` combined with
      `temperature=0.8` gave the most coherent, least repetitive fragments
-     among configs tried, and is now the script's default. Still pending:
-     training-side sweep (LoRA rank/alpha, learning rate).
+     among configs tried, and is now the script's default.
+   - **Done (2026-08-10), training-side**: trained a second config variant
+     (`training/configs/qwen3_4b_qlora_lowcap.yaml`) halving LoRA capacity
+     (`r=16→8, alpha=32→16`, same effective scale ratio) and learning rate
+     (`1e-4→5e-5`) together, hypothesis being that the baseline's fast
+     overfit (eval_loss rising 3.6→7.08 by step 180) was driven by too
+     much adapter capacity relative to this tiny corpus (~24 packed
+     sequences/epoch → very few, very large gradient steps). Confirmed:
+     this run's eval_loss only crept 3.65→3.94 before early stopping
+     triggered at step 105 (best eval_loss 3.651 at step 75), a much
+     gentler curve than the baseline's blowup — giving early stopping a
+     wider, more forgiving window instead of a knife-edge. Qualitative
+     samples from the resulting merged model
+     (`training/output/qwen3_4b_qlora_lowcap/merged`, tested with the new
+     temperature=0.8/repetition_penalty=1.15 defaults) were also more
+     coherent and image-driven, with no rambling/looping, matching the
+     gentler loss curve. **This lowcap config is now the recommended
+     starting point for future training runs** — update
+     `training/configs/qwen3_4b_qlora.yaml` to these values (or point at
+     the lowcap config directly) before the next full training pass, and
+     re-quantize/re-benchmark from this checkpoint rather than the
+     original baseline. See `eval/EVAL.md` for full sample logs.
 2. **Data-side levers before touching the objective**: with such a small
    corpus, per-epoch overfitting risk is largely a data-volume problem.
    Options: augment via paraphrasing/back-translation (risk: dilutes the

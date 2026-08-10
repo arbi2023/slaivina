@@ -270,3 +270,59 @@ Few-shot examples used:
 
 > ? Ciao! No. Non c'era niente. Soprattutto non era lì per te.
 
+
+## 2026-08-10 10:31 UTC -- model: `training/output/qwen3_4b_qlora_lowcap/merged`
+
+Generation params: temperature=0.8, top_p=0.95, repetition_penalty=1.15
+
+Few-shot examples used:
+- Come se metti una croce sopra al presepe: fai lo spoilerone.
+- Quando l'ho visto m'è rimasto tipo tatuaggio sul cervello
+- Quindi la morale è: anche se la barzelletta non fa ridere, anche se il volume non c'è, se la bella gnocca ride, la risata è contagiosa.
+- Come _self non c'è nessuno.
+
+**seed: `mare`**
+
+> di vetrine: tutte le stesse cose. Solo che ora sono tutte uguali. Anche gli occhi. Gli occhiali. I baffoni da sputarci dentro i cattolici.
+
+**seed: `autobus`**
+
+> , come le voci nella foresta: che riecheggiano a lungo, ma finiscono sempre nel cazzo di pene. È strano quanto siamo tutti dentro il culo. E allora perché ci sentiamo così leggeri?
+
+**seed: `insonnia`**
+
+> che si becca da sé. È un virus invisibile. Vira nel cuore. Ti morde. E ti dice: sei solo tu. Solo tu sai cosa sono i miei occhi. Sono tre occhioni stuccati e sanguinanti dentro la nebbia di un cazzo di fottale.
+
+**seed: `specchio`**
+
+> specchietto per bambini, ma i bambini sono tutti grandi. O no?
+
+**seed: `citofono`**
+
+> : "ciao! sono io!"
+
+
+## 2026-08-10 15:xx UTC -- Q4_K_M requantization of promoted checkpoint (r=8/alpha=16/lr=5e-5)
+
+Re-ran `quantize/convert_and_quantize.sh` (Q4_K_M only) against the newly promoted
+`training/output/qwen3_4b_qlora/merged` checkpoint (the sweep-lowcap config), replacing
+the GGUF previously built from the old baseline checkpoint (r=16/alpha=32/lr=1e-4).
+
+Perplexity (held-out `data/processed/pretrain_val.txt`, `-c 256`, 3 chunks):
+- Old baseline checkpoint, Q4_K_M: PPL = 33.29 +/- 5.50
+- **New promoted checkpoint, Q4_K_M: PPL = 32.55 +/- 5.24** (slightly better, despite lower LoRA rank)
+
+Speed (`llama-bench -p 128 -n 64`, CPU-only, 10 threads):
+- Old baseline: pp128 = 72.17 t/s, tg64 = 13.77 t/s
+- New promoted: pp128 = 70.19 t/s, tg64 = 15.67 t/s (within noise, same quant level/size as expected)
+
+Qualitative smoke test (`llama-cli -c 512 --temp 0.8 --repeat-penalty 1.15 -st`, seed "La slavina"):
+> Ah, la slavina! È quella che si aggrappa alla pelle come un ragno al tappeto… o forse è
+> l'altra volta. Quella della slavina c'è anche una cosa più seria: il *povero cane*
+
+Coherent, on-style, no repetition/looping -- confirms the promoted checkpoint quantizes and
+serves correctly via llama.cpp/GGUF. Full logs in `quantize/bench/perplexity.log` and
+`quantize/bench/speed.log` (both baseline and new entries kept, clearly labeled, for comparison).
+
+Note: `llama-cli` OOM-killed once with default (very large) context size on this checkpoint;
+always pass `-c 512` (or similar) for CPU smoke tests, no functional issue with the model/GGUF itself.

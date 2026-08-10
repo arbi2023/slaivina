@@ -12,8 +12,16 @@ max_seq_length: 1024
 load_in_4bit: true
 
 # LoRA (QLoRA: base stays 4-bit, only adapters train in higher precision).
-lora_r: 16
-lora_alpha: 32
+# r=8/alpha=16 (halved from an earlier r=16/alpha=32 baseline, same 2x
+# effective-scale ratio) -- chosen 2026-08-10 after a training-side sweep
+# confirmed lower LoRA capacity slows overfitting on this tiny corpus: the
+# baseline's eval_loss blew up 3.6->7.08 by step 180, while this
+# lower-capacity + lower-LR config only crept 3.65->3.94 before early
+# stopping, giving early stopping a much wider/safer window. See
+# PLAN.md#path-to-further-improve-output-quality-before-publishing and
+# eval/EVAL.md for the full comparison and qualitative samples.
+lora_r: 8
+lora_alpha: 16
 lora_dropout: 0.0
 target_modules:
   - q_proj
@@ -42,16 +50,21 @@ packing: true
 # train posts) collapses to only 24 packed sequences, so at effective batch
 # size 8 that's just 3 optimizer steps/epoch -- 3 epochs (9 steps total) was
 # only enough to validate the pipeline runs, not to move the model's
-# weights meaningfully. A 60-epoch/180-step run confirmed the corpus
-# overfits fast on this LoRA config: train_loss dropped 4.14 -> 1.02 while
-# eval_loss *rose* from ~3.6 (step 15-30) to 7.08 (step 180). load_best_model_at_end
-# + early stopping below now pick the best held-out checkpoint automatically
-# regardless of num_train_epochs, so it's kept high as a ceiling -- training
-# should stop itself well before then.
+# weights meaningfully. A 60-epoch/180-step run (with the original
+# r=16/alpha=32/lr=1e-4 hyperparameters) confirmed the corpus overfits fast:
+# train_loss dropped 4.14 -> 1.02 while eval_loss *rose* from ~3.6 (step
+# 15-30) to 7.08 (step 180) -- see the LoRA r/alpha note above for the
+# lower-capacity/lower-LR config now used instead, which slows this down
+# considerably. load_best_model_at_end + early stopping below now pick the
+# best held-out checkpoint automatically regardless of num_train_epochs, so
+# it's kept high as a ceiling -- training should stop itself well before
+# then.
 num_train_epochs: 60
 per_device_train_batch_size: 2
 gradient_accumulation_steps: 4
-learning_rate: 1.0e-4
+# Halved from an earlier 1.0e-4 baseline, together with the LoRA r/alpha
+# reduction above -- see the note there for the sweep result.
+learning_rate: 5.0e-5
 warmup_ratio: 0.03
 optim: adamw_8bit
 logging_steps: 5

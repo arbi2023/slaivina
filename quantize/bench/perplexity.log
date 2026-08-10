@@ -1,4 +1,4 @@
-=== q4_k_m ===
+=== q4_k_m (baseline checkpoint, r=16/alpha=32/lr=1e-4) ===
 0.00.385.629 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
 0.01.912.398 I 
 0.01.912.505 I system_info: n_threads = 10 (n_threads_batch = 10) / 20 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX_VNNI = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
@@ -32,5 +32,18 @@
 0.32.765.700 I perplexity: 31.92 seconds per pass - ETA 0.18 minutes
 [1]22.9805,[2]27.7733,[3]31.5102,
 0.32.852.784 I Final estimate: PPL = 31.5102 +/- 5.14571
+
+
+
+=== q4_k_m (promoted checkpoint, r=8/alpha=16/lr=5e-5, sweep-lowcap) ===
+0.00.388.564 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.01.933.508 I 
+0.01.933.715 I system_info: n_threads = 10 (n_threads_batch = 10) / 20 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX_VNNI = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+0.01.933.744 I perplexity: tokenizing the input ..
+0.01.935.502 I perplexity: tokenization took 1.752 ms
+0.01.935.568 I perplexity: calculating perplexity over 3 chunks, n_ctx=256, batch_size=2048, n_seq=8
+0.16.114.994 I perplexity: 14.18 seconds per pass - ETA 0.08 minutes
+[1]22.8528,[2]28.6654,[3]32.5477,
+0.16.195.639 I Final estimate: PPL = 32.5477 +/- 5.23951
 
 
