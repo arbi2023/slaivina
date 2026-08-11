@@ -8,4 +8,14 @@ updates:
   - package-ecosystem: "uv" # See documentation for possible values
     directory: "/" # Location of package manifests
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    # This is a small, sporadically-touched learning project (not a
+    # continuously-deployed service) -- weekly, one-PR-per-package updates
+    # produced frequent, conflict-prone PRs for purely transitive lockfile
+    # bumps. Grouping everything into a single monthly PR keeps Dependabot
+    # useful as a "what's outdated/vulnerable" signal without the churn.
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 2
